@@ -1,92 +1,24 @@
 const xlsx      = require("xlsx");
 const fs        = require("fs");
 const tempfile  = require('tempfile');
+const opts      = require('./opts/opts3');
 
 const fileName  = "test";
-const fileOut   = "out";
 const filePath  = `${__dirname}\\src\\${fileName}.xlsx`;
 
-const indexRE1  = /^[A-Z]{2}\.\d{3}/;
-const indexRE2  = /\d?SLT[0-9A-Z]*/;
 
-const heading   = [[ 
-                    "name : Название", 
-                    "article : Артикул", 
-                    "amount : Количество", 
-                    "price : Цена", 
-                    "image : Иллюстрация",
-                    "cf_rez_ba : Резьба",
-                    "cf_pn : PN",
-                    "cf_ves : Вес"
-                    ]];
+parseEx({path: filePath, sheet: 3, opts}, function(data) {
 
+    const heading = [ 
+        "name : Название", 
+        "article : Артикул",  
+        "price : Цена",
+        "amount : Количество",
+        "image : Иллюстрация"
+    ];
 
-//parseExcel(filePath, 2, handlerData);
-const opts = {
-    start: 8,
-    //caption: true,
-    //order: ["name", "article", "amount", "price", "image", "type", "pn", "weight"],
-    caption: "Фитинг аксиальный",
-    set: {
-        name: {
-            pos: [1, 3],
-            main: true,
-            prev: function(a) {
-                return a.trim();
-            },
-            handler: function(a, b, c) {
-                a = a.trim(); 
-                b = b.trim();
-                return (a) ? `${a.replace(/\s+/g, " ")} (${b})` : `${c.replace(/\s+/g, " ")} (${b})`;
-            }
-        },
-        article: {
-            pos: 2,
-            main: true
-        },
-        image: {
-            pos: 2,
-            handler: function(a) {
-                return a.match(/^[A-Z]{2}\.\d{3}/)[0] + ".jpg";
-            }
-        },
-        type: {
-            pos: 3,
-            handler: function(a) {
-                return a.trim();
-            }
-        },
-        pn: {
-            pos: 4,
-            handler: function(a) {
-                return a.trim();
-            },
-        },
-        weight: {
-            pos: 5,
-            handler: function(a) {
-                return Number(a);
-            },
-        },
-        price: {
-            pos: 10,
-            main: true,
-            handler: function(a) {
-                return Number(a.replace(/[^\d\.]/g, ""));
-            },
-        },
-        amount: {
-            pos: [7, 8],
-            handler: function(a, b) {
-                return Number(a.replace(/[^\d\.]/g, "")) * Number(b.replace(/[^\d\.]/g, ""));
-            }
-        }
-    }
-}
+    arrToCsv([heading, ...data], 'Полипропилен');
 
-parseEx({path: filePath, sheet: 1, opts}, function(data) {
-    arrToCsv(data, 'check');
-    //console.log(data);
 }); 
 
 function parseEx({path, sheet = 0, opts}, callback) {
@@ -104,7 +36,7 @@ function parseEx({path, sheet = 0, opts}, callback) {
             header: 1, 
             raw: false,
             defval: "",
-            blankrows: false
+            blankrows: true
         });
         callback(dataProcessing(data, opts));
     });
@@ -117,26 +49,28 @@ function dataProcessing(data, {
         set = {}, 
         global = {}
 }) {
-
+    
     const result = [];
-    let mainPos = [];
+    const main = [];
 
     global.prev = {};
 
     for(const key in set) {
-        if(set[key].main) mainPos = mainPos.concat(set[key].pos);
+        if(set[key].main) {
+            if(isNumber(set[key].pos)) main.push(set[key].pos);
+            else if(isArray(set[key].pos)) main.push(...set[key].pos);
+        }
     }
-  
+
     for(let i = start; i < data.length; i++) {
-        /* if(captions) {
-            data[i]
-        } */
-        if(mainPos.length && mainPos.every((e) => (data[i][e] && data[i][e].trim()) ? false : true)) continue;
+        if(main.length && main.some(function(e) {
+            return (!isUndefined(data[i][e]) && data[i][e].trim()) ? false : true;
+        })) continue;
         
         const item = {};
 
         for(const key in set) {
-            if (typeof set[key].pos === 'number') {
+            if (isNumber(set[key].pos)) {
                 set[key].val = (checkHandlerFun(set[key].handler)) ? 
                                 set[key].handler(data[i][set[key].pos], (set[key].prev) ? global.prev[key] : undefined) : 
                                 data[i][set[key].pos];
@@ -144,7 +78,9 @@ function dataProcessing(data, {
                     const prev = set[key].prev(data[i][set[key].pos]);
                     if(prev) global.prev[key] = prev;
                 }
-            } else if (Array.isArray(set[key].pos)) {
+            } else if (isString(set[key].pos)){
+                set[key].val = (isFunction(set[key].handler)) ? set[key].handler(set[key].pos) : set[key].pos;
+            } else if (isArray(set[key].pos)) {
                 if(!checkHandlerFun(set[key].handler)) throw Error("missing handler");
                 set[key].val = set[key].handler(...set[key].pos.map(e => data[i][e]), (set[key].prev) ? global.prev[key] : undefined);
                 if(set[key].prev) {
@@ -153,18 +89,19 @@ function dataProcessing(data, {
                 }
             } else throw Error("unexpected type");
 
+
             item[key] = set[key].val;
         }
-        if(Array.isArray(order) && order.length) {
-            const list = [];
+        const list = [];
+
+        if(isArray(order) && order.length) {
             order.forEach(e => {
                 if(!(e in item)) throw Error(`order: uncorrect name ${e}`);
                 list.push(item[e]);
             });
-            result.push(list);
-        } else {
-            result.push(Object.values(item));
-        }
+        } else list.push(...Object.values(item));
+    
+        result.push(list);
     }
     return result;
 }
@@ -281,6 +218,7 @@ function correctStr(str) {
 function isInteger(num) {
     return (num ^ 0) === num;
 }
+
 // Взяитие числа из строки
 function takeNum(str) {
     return Number(str.replace(/[,\s]/g, "").match(/\d+(\.\d+)?/)[0]);
@@ -315,4 +253,22 @@ function convert(str, {eur, usd}) {
             throw Error(`unfamiliar currency: ${currency}`);
     }
     return price;
+}
+
+
+// CHECK TYPES
+function isFunction(fun) {
+    return (typeof fun === 'function') ? true : false;
+}
+function isNumber(num) {
+    return (typeof num === 'number') ? true : false;
+}
+function isString(str) {
+    return (typeof str === 'string') ? true : false;
+}
+function isArray(arr) {
+    return Array.isArray(arr);
+}
+function isUndefined(und) {
+    return (typeof und === 'undefined') ? true : false;
 }

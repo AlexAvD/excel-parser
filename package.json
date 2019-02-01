@@ -1,0 +1,17 @@
+{
+  "name": "excel-parse",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "node main.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {},
+  "devDependencies": {
+    "tempfile": "^2.0.0",
+    "xlsx": "^0.14.1"
+  }
+}

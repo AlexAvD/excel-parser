@@ -21,18 +21,24 @@ const heading   = [[
                     ]];
 
 
-//parseExcel(filePath, 2, handleData);
+//parseExcel(filePath, 2, handlerData);
 const opts = {
     start: 8,
     //caption: true,
-    order: ["name", "article", "amount", "price", "image", "type", "pn", "weight"],
+    //order: ["name", "article", "amount", "price", "image", "type", "pn", "weight"],
     caption: "Фитинг аксиальный",
     set: {
         name: {
-            pos: 1,
+            pos: [1, 3],
             main: true,
-            replace: [/\s+/g, " "],
-            prev: true
+            prev: function(a) {
+                return a.trim();
+            },
+            handler: function(a, b, c) {
+                a = a.trim(); 
+                b = b.trim();
+                return (a) ? `${a.replace(/\s+/g, " ")} (${b})` : `${c.replace(/\s+/g, " ")} (${b})`;
+            }
         },
         article: {
             pos: 2,
@@ -40,39 +46,47 @@ const opts = {
         },
         image: {
             pos: 2,
-            match: /^[A-Z]{2}\.\d{3}/,
-            after: ".jpg"
+            handler: function(a) {
+                return a.match(/^[A-Z]{2}\.\d{3}/)[0] + ".jpg";
+            }
         },
         type: {
             pos: 3,
+            handler: function(a) {
+                return a.trim();
+            }
         },
         pn: {
             pos: 4,
-            type: 'number'
+            handler: function(a) {
+                return a.trim();
+            },
         },
         weight: {
             pos: 5,
-            type: 'number'
+            handler: function(a) {
+                return Number(a);
+            },
         },
         price: {
             pos: 10,
             main: true,
-            replace: [/[^\d\.]/g, ""],
-            type: 'number'
+            handler: function(a) {
+                return Number(a.replace(/[^\d\.]/g, ""));
+            },
         },
         amount: {
-            pos: {
-                multi: [7, 8],
-                handle: function(a, b) {
-                    return Number(a) * Number(b);
-                }
-            }   
+            pos: [7, 8],
+            handler: function(a, b) {
+                return Number(a.replace(/[^\d\.]/g, "")) * Number(b.replace(/[^\d\.]/g, ""));
+            }
         }
     }
 }
 
 parseEx({path: filePath, sheet: 1, opts}, function(data) {
-    console.log(data);
+    arrToCsv(data, 'check');
+    //console.log(data);
 }); 
 
 function parseEx({path, sheet = 0, opts}, callback) {
@@ -96,71 +110,52 @@ function parseEx({path, sheet = 0, opts}, callback) {
     });
 }
 
-function dataProcessing(data, {start = 0, captions = false, order, set = {}, global = {}}) {
+function dataProcessing(data, {
+        start = 0, 
+        captions = false, 
+        order,
+        set = {}, 
+        global = {}
+}) {
+
     const result = [];
-    const mainPos = [];
+    let mainPos = [];
 
     global.prev = {};
 
     for(const key in set) {
-        if(set[key].main) {
-           mainPos.push(set[key].pos);
-        }
-        if(!set[key].pos && typeof set[key].pos !== 'number') {
-            throw Error(`uncorrect pos in ${set[key]}`);
-        } 
+        if(set[key].main) mainPos = mainPos.concat(set[key].pos);
     }
   
     for(let i = start; i < data.length; i++) {
         /* if(captions) {
             data[i]
         } */
-        if(mainPos.every((e) => (data[i][e] && data[i][e].trim()) ? false : true)) continue;
+        if(mainPos.length && mainPos.every((e) => (data[i][e] && data[i][e].trim()) ? false : true)) continue;
         
         const item = {};
 
         for(const key in set) {
-            if (typeof set[key].pos === 'object') {
-                if(!set[key].pos.handle && typeof set[key].pos.handle !== 'function') 
-                    throw Error("handler function not defined");
-                set[key].val = set[key].pos.handle(...set[key].pos.multi.map(e => data[i][e]));
-            } else if (typeof set[key].pos === 'number') {
-                set[key].val = data[i][set[key].pos].trim();
-            } else {
-                throw Error("unexpected type");
-            }
-            if(set[key].val && typeof set[key].val === 'string') {
-                if(set[key].replace) {
-                    set[key].val = set[key].val.replace(set[key].replace[0], set[key].replace[1])
-                }
-                if(set[key].match) {
-                    set[key].val = set[key].val.match(set[key].match)[0];
-                }                    
-                if(set[key].type) {
-                    if(set[key].type === 'number') {
-                        set[key].val = Number(set[key].val);
-                        if(isNaN(set[key].val)) throw Error("Can't be number");
-                    }
-                }
-                if(set[key].after) {
-                    set[key].val += set[key].after;
-                }
-                if(set[key].before) {
-                    set[key].val = set[key].before + set[key].val;
-                }
+            if (typeof set[key].pos === 'number') {
+                set[key].val = (checkHandlerFun(set[key].handler)) ? 
+                                set[key].handler(data[i][set[key].pos], (set[key].prev) ? global.prev[key] : undefined) : 
+                                data[i][set[key].pos];
                 if(set[key].prev) {
-                    global.prev[key] = set[key].val;
+                    const prev = set[key].prev(data[i][set[key].pos]);
+                    if(prev) global.prev[key] = prev;
                 }
-            } else {
-                if(set[key].prev || global.prev[key]) {
-                    set[key].val = global.prev[key];
+            } else if (Array.isArray(set[key].pos)) {
+                if(!checkHandlerFun(set[key].handler)) throw Error("missing handler");
+                set[key].val = set[key].handler(...set[key].pos.map(e => data[i][e]), (set[key].prev) ? global.prev[key] : undefined);
+                if(set[key].prev) {
+                    const prev = set[key].prev(...set[key].pos.map(e => data[i][e]));
+                    if(prev) global.prev[key] = prev;
                 }
-            }
+            } else throw Error("unexpected type");
+
             item[key] = set[key].val;
         }
-        if(order) {
-            if(Object.values(item).length !== order.length) 
-                throw Error("order: the number of elements does not match");
+        if(Array.isArray(order) && order.length) {
             const list = [];
             order.forEach(e => {
                 if(!(e in item)) throw Error(`order: uncorrect name ${e}`);
@@ -198,7 +193,7 @@ function parseExcel(pathToExcel, sheetIndex, callback) {
     });
 }
 // Обарботка данных 
-function handleData(arr) {
+function handlerData(arr) {
     const data = {};
 
     let caption = "out";
@@ -271,7 +266,13 @@ function handleData(arr) {
 function removeExcess(str) {
     return str.replace(/\s+/g, " ");
 }
-
+function checkHandlerFun(fun) {
+    if(fun) {
+        if(typeof fun === 'function') return true;
+        else throw Error("handler is not a function");
+    } 
+    return false;
+}
 // Убирает пробелы в начале и в конце, и заменяет несколько пробелов на один
 function correctStr(str) {
     return str.trim().replace(/\s+/g, " ");

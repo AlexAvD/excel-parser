@@ -1,8 +1,9 @@
 const xlsx      = require("xlsx");
 const fs        = require("fs");
 const tempfile  = require('tempfile');
-const opts      = require('./opts/opts3');
+const opts      = require('./opts/opts5');
 
+const log = console.log;
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
 
 const parseSettings = {
@@ -12,7 +13,6 @@ const parseSettings = {
 }
 
 parseEx(parseSettings, function(data) {
-
     const heading = [ 
         "name : Название", 
         "article : Артикул",  
@@ -23,8 +23,9 @@ parseEx(parseSettings, function(data) {
         "cf_du : Ду"
     ];
 
-    arrToCsv([heading, ...data], 'Полипропилен');
-
+    for(const key in data) {
+        arrToCsv([heading, ...data[key]], key);
+    }
 }); 
 
 function parseEx({path, sheet = 0, opts}, callback) {
@@ -45,19 +46,21 @@ function parseEx({path, sheet = 0, opts}, callback) {
             defval: "",
             blankrows: true
         });
-        console.log(data);
-        //callback(dataProcessing(data, opts));
+        callback(dataProcessing(data, opts));
     });
 }
 
 function dataProcessing(data, {
         start = 0, 
-        order = [],
+        order = false,
         param = {}, 
-        global = {}
+        global = {
+            caption: "OUT"
+        },
+        caption
 }) {
     
-    const result = [];
+    const result = {};
     const main = [];
 
     for(const key in param) {
@@ -70,11 +73,18 @@ function dataProcessing(data, {
     }
 
     for(let i = start; i < data.length; i++) {
+
+        if(isFunction(caption)) {
+            const head = caption(data[i]);
+            if(head) global.caption = head;
+        } 
+
         if(main.length && main.some(e => (!isUndefined(data[i][e]) && data[i][e].trim()) ? false : true)) continue;
 
-        const item = {};
+        const item = [];
 
         for(const key in param) {
+            
             if (isNumber(param[key].pos)) {
                 param[key].val = (checkHandlerFun(param[key].handler)) ? 
                                 param[key].handler(data[i][param[key].pos], (param[key].prev) ? global.prev[key] : undefined) : 
@@ -97,19 +107,20 @@ function dataProcessing(data, {
                     if (prev.some(e => (e.trim) ? true : false)) global.prev[key] = prev;
                 }
             }
-            item[key] = param[key].val;
+            
+            if(order) {
+                if(isUndefined(param[key].order)) throw Error(`${key}.order not set`);
+                item[param[key].order] = param[key].val;
+            } else {
+                item.push(param[key].val);
+            }
         }
 
-        const list = [];
-
-        if (isArray(order) && order.length) {
-            order.forEach(e => {
-                if(!(e in item)) throw Error(`order: uncorrect name ${e}`);
-                list.push(item[e]);
-            });
-        } else list.push(...Object.values(item));
-    
-        result.push(list);
+        if(isFunction(caption)) {
+            if(!(global.caption in result)) result[global.caption] = [];
+            result[global.caption].push(item);
+        } else result[i] = item;
+        
     }
     return result;
 }

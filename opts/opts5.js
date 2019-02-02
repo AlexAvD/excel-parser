@@ -1,7 +1,8 @@
 const opts = {
-    start: 7,
+    start: 1,
     caption: function(a) {
-
+        a = a[0].trim().replace(/\s+/g, " ");
+        return ( !(/\d/.test(a)) ) ? a : '';
     },
     param: {
         name: {
@@ -30,7 +31,9 @@ const opts = {
         image: {
             pos: 'b',
             handler: function(a) {
-               
+                a = a.match(/([А-Я]{3,}).+/);
+                if(a) return a[0].replace(/("[А-Я]+").+(ДГ)/, '$2 $1').replace(/([А-Я]{3,})(-\d{1,3})\s("СТРИМ")/, '$1 $3$2').replace(/("|,(?= класс)|(?<=м3\/ч).+)/g, "").replace(/класс/, 'Класс').trim() + '.jpg';
+                return '';
             }
         },
         du: {

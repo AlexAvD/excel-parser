@@ -1,32 +1,32 @@
 const opts = {
     start: 7,
-    set: {
+    param: {
         name: {
-            pos: 1,
+            pos: 'b',
             main: true,
             handler: function(a) {
                 return a.trim().replace(/\s+/g, " ");
             }
         },
         article: {
-            pos: 2,
+            pos: 'c',
             main: true,
             hanlder: function(a) {
                 return a.trim();
             }
         },
         price: {
-            pos: 9,
+            pos: 'j',
             main: true,
             handler: function(a) {
                 return Number(a.replace(/([^\d\.]|\.$)/g, ''));
             },
         },
         amount: {
-            pos: '1000',
+            custom: '1000'
         },
         image: {
-            pos: 2,
+            pos: 'c',
             handler: function(a) {
                 let name = '';
                 if(/SLTPPERT1/.test(a)) {

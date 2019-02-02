@@ -1,42 +1,48 @@
 const opts = {
     start: 7,
-    set: {
+    caption: function(a) {
+
+    },
+    param: {
         name: {
-            pos: 1,
+            pos: 'b',
             main: true,
             handler: function(a) {
                 return a.trim().replace(/\s+/g, " ");
             }
         },
         article: {
-            pos: 2,
-            main: true,
+            pos: 'a',
             hanlder: function(a) {
                 return a.trim();
             }
         },
         price: {
-            pos: 9,
+            pos: 'e',
             main: true,
             handler: function(a) {
                 return Number(a.replace(/([^\d\.]|\.$)/g, ''));
             },
         },
         amount: {
-            pos: '1000',
+            custom: '1000'
         },
         image: {
-            pos: 2,
+            pos: 'b',
             handler: function(a) {
-                let name = '';
-                if(/SLTPPERT1/.test(a)) {
-                    name = 'SLTPPERT1.jpg';
-                } else if(/SLTPS11/.test(a)) {
-                    name = 'SLTPS11.jpg';
-                } else if(/SLTPS7/.test(a)) {
-                    name = 'SLTPS7.jpg';
-                }
-                return name;
+               
+            }
+        },
+        du: {
+            pos: 'c',
+            handler: function(a) {
+                return a.replace(/[^\d]/g, '');
+            }
+        },
+        len: {
+            pos: 'd',
+            handler: function(a) {
+                return a.replace(/[^\d]/g, '');
             }
         }
     }

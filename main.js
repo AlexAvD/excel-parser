@@ -1,14 +1,15 @@
 const xlsx      = require("xlsx");
 const fs        = require("fs");
 const tempfile  = require('tempfile');
-const opts      = require('./opts/opts5');
+const opts      = require('./opts/opts2');
 
-const log = console.log;
+const {log} = console;
+
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
 
 const parseSettings = {
     path: './src/test.xlsx',
-    sheet: 5,
+    sheet: 2,
     opts
 }
 
@@ -18,14 +19,14 @@ parseEx(parseSettings, function(data) {
         "article : Артикул",  
         "price : Цена",
         "amount : Количество",
-        "image : Иллюстрация",
-        "cf_montaznaa_dlina : Монтажная длина",
-        "cf_du : Ду"
+        "image : Иллюстрация"
+        // "cf_montaznaa_dlina : Монтажная длина",
+        // "cf_du : Ду"
     ];
-
-    for(const key in data) {
-        arrToCsv([heading, ...data[key]], key);
-    }
+    log(data);
+    // for(const key in data) {
+    //     arrToCsv([heading, ...data[key]], key);
+    // }
 }); 
 
 function parseEx({path, sheet = 0, opts}, callback) {
@@ -53,74 +54,59 @@ function parseEx({path, sheet = 0, opts}, callback) {
 function dataProcessing(data, {
         start = 0, 
         order = false,
-        param = {}, 
-        global = {
-            caption: "OUT"
-        },
+        param = {},
         caption
 }) {
     
-    const result = {};
-    const main = [];
+    const result    = {};
+    const main      = [];
+    let title       = 'out';
 
     for(const key in param) {
-        if(isFunction(param[key].prev)) global.prev = {};
-        if(isString(param[key].pos)) param[key].pos = alphToArab(param[key].pos);
-        if(param[key].main) {
-            if(isNumber(param[key].pos)) main.push(param[key].pos);
-            else if(isArray(param[key].pos)) main.push(...param[key].pos);
+        if(isNumber(param[key].pos)) {
+            if(param[key].main) main.push(param[key].pos);
+        } else if(isString(param[key].pos)) {
+            param[key].pos = alphToArab(param[key].pos);
+            if(param[key].main) main.push(param[key].pos);
+        } else if(isArray(param[key].pos)) {
+            param[key].pos = param[key].pos.map(e => (isString(e)) ? alphToArab(e) : e);
+            if(param[key].main) main.push(...param[key].pos);
+        } else if(isUndefined(param[key].pos)) {
+            if(isUndefined(param[key].custom)) throw Error(`${key}.custom: is missing`);
+            if(!isString(param[key].custom)) throw Error(`${key}.custom: is not a string`);
+            param[key].val = param[key].custom;
+        } else throw Error(`${key}.pos: ${param[key].pos}: unexpected type`); 
+        if(!isUndefined(param[key].pos)) {
+            if(isUndefined(param[key].handler)) throw Error(`${key}.handler: is missing`);
+            if(!isFunction(param[key].handler)) throw Error(`${key}.handler: is not a function`);
         }
+        if(order && !isNumber(param[key].order)) throw Error(`${key}.order: not a number`);
     }
-
+    
     for(let i = start; i < data.length; i++) {
-
         if(isFunction(caption)) {
-            const head = caption(data[i]);
-            if(head) global.caption = head;
+            const t = caption(data[i]);
+            title = (t) ? t : title;
+            if(!(title in result)) result[title] = [];
         } 
 
-        if(main.length && main.some(e => (!isUndefined(data[i][e]) && data[i][e].trim()) ? false : true)) continue;
+        if(main.length && main.some(e => (data[i][e].trim()) ? false : true)) continue;
 
         const item = [];
 
         for(const key in param) {
-            
-            if (isNumber(param[key].pos)) {
-                param[key].val = (checkHandlerFun(param[key].handler)) ? 
-                                param[key].handler(data[i][param[key].pos], (param[key].prev) ? global.prev[key] : undefined) : 
-                                data[i][param[key].pos];
-            } else if (isArray(param[key].pos)) {
-                if(!checkHandlerFun(param[key].handler)) throw Error("missing handler");
-                param[key].val = param[key].handler(...param[key].pos.map(e => data[i][e]), (param[key].prev) ? global.prev[key] : undefined);
-            } else if (isUndefined(param[key].pos) && param[key].custom) {
-                param[key].val = param[key].custom;
-            } else throw Error("unexpected type");
+            if(!param[key].custom) {
+                const {pos, val} = param[key];
+                param[key].val = param[key].handler(
+                    (isArray(pos)) ? pos.map(e => data[i][e]) : data[i][pos], 
+                    (param[key].prev) ? val : undefined
+                );
+            }
 
-            if (param[key].prev) {
-                let prev;
-                if (isNumber(param[key].pos)) {
-                    prev = data[i][param[key].pos].trim();
-                    if (prev) global.prev[key] = prev;
-                } 
-                else if (isArray(param[key].pos)) {
-                    prev = param[key].pos.map(e => data[i][e]);
-                    if (prev.some(e => (e.trim) ? true : false)) global.prev[key] = prev;
-                }
-            }
-            
-            if(order) {
-                if(isUndefined(param[key].order)) throw Error(`${key}.order not set`);
-                item[param[key].order] = param[key].val;
-            } else {
-                item.push(param[key].val);
-            }
+            if(order) item[param[key].order] = param[key].val;
+            else item.push(param[key].val);
         }
-
-        if(isFunction(caption)) {
-            if(!(global.caption in result)) result[global.caption] = [];
-            result[global.caption].push(item);
-        } else result[i] = item;
-        
+        result[title].push(item);
     }
     return result;
 }
@@ -130,15 +116,6 @@ function arrToCsv(arrData, outName) {
     xlsx.stream
         .to_csv(xlsx.utils.aoa_to_sheet(arrData), {FS: ";"})
         .pipe(fs.createWriteStream(`dist\\${outName}.csv`));
-}
-
-
-function checkHandlerFun(fun) {
-    if(!isUndefined(fun)) {
-        if(isFunction(fun)) return true;
-        else throw Error("handler is not a function");
-    } 
-    return false;
 }
 
 // CHECK TYPES

@@ -2,14 +2,18 @@
   "name": "excel-parse",
   "version": "1.0.0",
   "description": "",
-  "main": "main.js",
+  "main": "index.js",
   "scripts": {
-    "test": "node main.js"
+    "start": "node ."
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {},
+  "dependencies": {
+    "cyrillic-to-translit-js": "^2.2.0",
+    "inquirer": "^6.5.0",
+    "readline-sync": "^1.4.10"
+  },
   "devDependencies": {
     "tempfile": "^2.0.0",
     "xlsx": "^0.14.1"
